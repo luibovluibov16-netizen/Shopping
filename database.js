@@ -5,6 +5,8 @@ window.shoppingCenters = [
     lng: 44.496754,
     address: 'Бульвар 30 лет Победы, 21',
     district: 'Дзержинский район',
+    type: 'Региональный',
+    area: 64000,
   },
   {
     name: 'Аура',
@@ -12,6 +14,8 @@ window.shoppingCenters = [
     lng: 44.493919,
     address: 'Проспект Маршала Жукова, 94',
     district: 'Дзержинский район',
+    type: 'Районный',
+    area: 27000,
   },
   {
     name: 'Ворошиловский',
@@ -19,6 +23,8 @@ window.shoppingCenters = [
     lng: 44.500969,
     address: 'Рабоче-Крестьянская улица, 9Б',
     district: 'Ворошиловский район',
+    type: 'Региональный',
+    area: 48000,
   },
   {
     name: 'Пирамида',
@@ -26,6 +32,8 @@ window.shoppingCenters = [
     lng: 44.509555,
     address: 'Краснознаменская улица, 9',
     district: 'Центральный район',
+    type: 'Районный',
+    area: 23000,
   },
   {
     name: 'Европа Сити Молл',
@@ -33,6 +41,8 @@ window.shoppingCenters = [
     lng: 44.541563,
     address: 'Проспект им. В.И. Ленина, 54Б',
     district: 'Центральный район',
+    type: 'Региональный',
+    area: 46981,
   },
   {
     name: 'Цитрус',
@@ -40,6 +50,8 @@ window.shoppingCenters = [
     lng: 44.505901,
     address: '8 Воздушной Армии, 28А',
     district: 'Дзержинский район',
+    type: 'Локальный',
+    area: 8958,
   },
   {
     name: 'Мармелад',
@@ -47,6 +59,8 @@ window.shoppingCenters = [
     lng: 44.519426,
     address: 'Улица имени Землячки, 110Б',
     district: 'Дзержинский район',
+    type: 'Региональный',
+    area: 80000,
   },
   {
     name: 'Акварель',
@@ -54,6 +68,8 @@ window.shoppingCenters = [
     lng: 44.436292,
     address: 'Университетский проспект, 107',
     district: 'Советский район',
+    type: 'Региональный',
+    area: 121834,
   },
   {
     name: 'Космос',
@@ -61,6 +77,8 @@ window.shoppingCenters = [
     lng: 44.425564,
     address: 'Улица Курчатова, 3-9',
     district: 'Кировский район',
+    type: 'Районный',
+    area: 10428,
   },
   {
     name: 'Семь звёзд',
@@ -68,6 +86,8 @@ window.shoppingCenters = [
     lng: 44.604493,
     address: 'Проспект имени В.И. Ленина, 1Б',
     district: 'Тракторозаводский район',
+    type: 'Региональный',
+    area: 44410,
   },
   {
     name: 'Северный',
@@ -75,6 +95,8 @@ window.shoppingCenters = [
     lng: 44.544207,
     address: 'Проспект Металлургов, 35',
     district: 'Краснооктябрьский район',
+    type: 'Локальный',
+    area: 3146,
   },
   {
     name: 'СтройГрад',
@@ -82,6 +104,8 @@ window.shoppingCenters = [
     lng: 44.548183,
     address: 'Проспект им. В.И. Ленина, 65К',
     district: 'Краснооктябрьский район',
+    type: 'Районный',
+    area: 13236,
   },
   {
     name: 'Юбилейный',
@@ -89,13 +113,8 @@ window.shoppingCenters = [
     lng: 44.563146,
     address: 'Улица 50 лет Октября, 15А',
     district: 'Красноармейский район',
-  },
-  {
-    name: 'Такой',
-    lat: 48.689366,
-    lng: 44.484979,
-    address: 'Рабоче-Крестьянская, 48',
-    district: 'Ворошиловский район',
+    type: 'Районный',
+    area: 20000,
   },
   {
     name: 'Советский',
@@ -103,6 +122,8 @@ window.shoppingCenters = [
     lng: 44.43528,
     address: 'Университетский проспект, 95Б',
     district: 'Советский район',
+    type: 'Локальный',
+    area: 3400,
   },
   {
     name: 'Зелёное кольцо',
@@ -110,6 +131,8 @@ window.shoppingCenters = [
     lng: 44.441357,
     address: 'Электролесовская, 70Д',
     district: 'Советский район',
+    type: 'Районный',
+    area: 10600,
   },
   {
     name: 'Бейкер Молл',
@@ -117,6 +140,8 @@ window.shoppingCenters = [
     lng: 44.512391,
     address: 'Проспект Дорожников, 44А',
     district: 'Дзержинский район',
+    type: 'Локальный',
+    area: 1100,
   },
   {
     name: 'Октава',
@@ -124,6 +149,8 @@ window.shoppingCenters = [
     lng: 44.496609,
     address: 'Улица Константина Симонова, 17',
     district: 'Дзержинский район',
+    type: 'Локальный',
+    area: 1027,
   },
   {
     name: 'Тракторный',
@@ -131,5 +158,7 @@ window.shoppingCenters = [
     lng: 44.596862,
     address: 'Ополченская, 11А',
     district: 'Тракторозаводский район',
+    type: 'Районный',
+    area: 7262,
   },
 ];
