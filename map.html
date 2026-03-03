@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="ru">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=0" />
+    <title>Карта объектов</title>
+
+    <link href="styles/base.css" rel="stylesheet" />
+    <link href="styles/base_adaptive.css" rel="stylesheet" />
+    <link href="styles/map.css" rel="stylesheet" />
+
+    <!-- Yandex Maps API (ключ для JavaScript API и HTTP геокодера) -->
+    <script src="https://api-maps.yandex.ru/2.1/?lang=ru_RU&apikey=d7022608-3824-4ffd-8a89-8b9ffa3e6b2b" type="text/javascript"></script>
+</head>
+
+<body>
+    <header class="header">
+        <div class="container header-inner">
+            <a class="header-brand" href="#">
+                <div class="header-logo">T</div>
+                <div class="header-title">radeMap </div>
+            </a>
+            <nav class="header-menu">
+                <a class="header-link" href="./map.html">Карта <span>объектов</span></a>
+                <a class="header-link" href="./analytics.html">Аналитика <span>спроса</span></a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- контейнер с картой -->
+    <div id="map"></div>
+
+    <!-- боковая панель (можно расширить) -->
+    <aside class="main" id="sidebar">
+        <div class="main-header">
+            <!-- основной заголовок для расчёта пути -->
+            <div class="main-title">Рассчитать путь</div>
+            <div class="main-text">Выберите параметры для расчёта пути</div>
+          </div>
+    <div class="main-content">
+        <div class="main-route" [formGroup]="routeForm">
+            <div class="main-block-title">Маршрут</div>
+            <div class="main-fields">
+                <div class="main-field" id="fromField">
+                    <!-- иконка слева, берём изображение из папки images -->
+                    <img src="images/Icon.png" class="input-icon" alt="Откуда" />
+                    <input id="from" formControlName="from" [attr.disabled]="!!orderId()"
+                        placeholder="Откуда: начните вводить адрес" autocomplete="off" />
+                    <div class="main-ac" id="fromAc" role="listbox" aria-label="Подсказки адресов"></div>
+                </div>
+                               
+
+                <div class="main-field" id="toField">
+                    <!-- иконка слева для пункта назначения -->
+                    <img src="images/Icon(1).png" class="input-icon" alt="Куда" />
+                    <input id="to" formControlName="to" [attr.disabled]="!!orderId()"
+                        placeholder="Куда: начните вводить адрес" autocomplete="off" />
+                    <div class="main-ac" id="toAc" role="listbox" aria-label="Подсказки адресов"></div>
+                </div>
+
+                <!-- Кнопка включения/отключения барьеров среды -->
+                <button type="button" id="toggleObstacles" class="toggle-btn" aria-pressed="false">
+                   Барьеры среды
+                </button>
+                <!-- Кнопка включения/отключения торговые объекты -->
+                <button type="button" id="toggleObstacles" class="toggle-btn" aria-pressed="false">
+                     Торговые объекты
+                </button>
+                <!-- Кнопка включения/отключения зоны влияния -->
+                <button type="button" id="toggleObstacles" class="toggle-btn" aria-pressed="false">
+                     Зоны влияния
+                </button>
+                <!-- Кнопка включения/отключения зоны дефицита -->
+                <button type="button" id="toggleObstacles" class="toggle-btn" aria-pressed="false">
+                     Зоны дефицита
+                </button>
+                <!-- Кнопка включения/отключения разместить объект -->
+                <button type="button" id="toggleObstacles" class="toggle-btn" aria-pressed="false">
+                     Разместить объект
+                </button>
+                <!-- Кнопка включения/отключения оценка потенциала -->
+                <button type="button" id="toggleObstacles" class="toggle-btn" aria-pressed="false">
+                     Оценка потенциала
+                </button>
+
+            </div>
+            <!-- сюда будут выводиться сведения о выбранной точке/многоугольнике -->
+            <div id="info" class="main-info" aria-live="polite"></div>
+        </div>
+    </aside>
+
+    <!-- данные торговых центров и скрипт инициализации карты -->
+    <script src="database.js"></script>
+    <script>
+        // Ключи Yandex API
+        const YANDEX_API_KEY = 'd7022608-3824-4ffd-8a89-8b9ffa3e6b2b'; // JavaScript API и HTTP Геокодер
+        const YANDEX_SUGGEST_KEY = '47a511c4-7069-406b-8a3d-ac63d634f4be'; // API Геосаджеста
+        // функции помогают добавить на карту пусть торговые, пусть природные объекты
+        ymaps.ready(initMap);
+
+        function initMap() {
+            const center = [48.711667, 44.513889]; // центр Волгограда 
+            const myMap = new ymaps.Map('map', {
+                center: center,
+                zoom: 10,
+                controls: ['zoomControl', 'typeSelector', 'fullscreenControl']
+            });
+
+            // Добавляем торговые центры из базы
+            if (window.shoppingCenters) {
+                window.shoppingCenters.forEach(c => {
+                    const placemark = new ymaps.Placemark([c.lat, c.lng], {
+                        balloonContent: `<strong>${c.name}</strong><br>${c.address}`
+                    }, {
+                        preset: 'islands#blueShoppingIcon'
+                    });
+                    myMap.geoObjects.add(placemark);
+                });
+            }
+
+            // Слой "естественные препятствия" (GeoJSON) + кнопка включения/отключения
+            // ymaps.geoJson умеет конвертировать GeoJSON в объекты Яндекс.Карт
+            let obstaclesCollection = null;
+            let obstaclesEnabled = false;
+
+            // Обновленная настройка кнопки барьеров среды
+            const obstaclesBtn = document.getElementById('toggleObstacles');
+            const setObstaclesUi = () => {
+                obstaclesBtn.setAttribute('aria-pressed', String(obstaclesEnabled));
+                obstaclesBtn.classList.toggle('is-on', obstaclesEnabled);
+                obstaclesBtn.textContent = 'Барьеры среды';
+            };
+
+            setObstaclesUi();
+
+            obstaclesBtn.addEventListener('click', () => {
+                obstaclesEnabled = !obstaclesEnabled;
+                setObstaclesUi();
+                applyObstaclesVisibility();
+            });
+
+            fetch('obstacles.geojson')
+                .then(res => res.json())
+                .then(data => {
+                    obstaclesCollection = ymaps.geoJson(data, {
+                        geoObjectOptions: {
+                            fillColor: '#ff000033',
+                            strokeColor: '#ff0000',
+                            strokeWidth: 1,
+                            opacity: 0.5
+                        }
+                    });
+
+                    // По умолчанию слой выключен; добавляем только если пользователь включил
+                    applyObstaclesVisibility();
+                })
+                .catch(e => console.error('Не удалось загрузить obstacles.geojson', e));
+
+            // настройка автоподсказок в полях маршрута
+            // SuggestView автоматически подсказывает города и адреса в формате
+            // "Город, улица, дом" в соответствии с заданием
+            new ymaps.SuggestView('from', { provider: 'yandex#search', results: 5 });
+            new ymaps.SuggestView('to',   { provider: 'yandex#search', results: 5 });
+
+            // при клике выводим информацию в боковую панель
+            myMap.events.add('click', function (e) {
+                const target = e.get('target');
+                const infoContainer = document.getElementById('info');
+                if (!infoContainer) return;
+
+                if (target && target.properties) {
+                    const props = target.properties.getAll();
+                    infoContainer.innerHTML = '<pre>' + JSON.stringify(props, null, 2) + '</pre>';
+                } else {
+                    infoContainer.textContent = '';
+                }
+            });
+        }
+    </script>
+</body>
+
+</html>
