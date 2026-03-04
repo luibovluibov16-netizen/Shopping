@@ -92,8 +92,9 @@
     <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
     <!-- Визуализация диаграмм Вороного -->
     <script src="https://d3js.org/d3-delaunay.v6.min.js"></script>
-        <!-- Подключение скриптов -->
+    <!-- Подключение скриптов -->
     <script src="database.js"></script>
+    <script src="adminBorders.js"></script>
     <script>
     // Глобальные переменные
     let map;
@@ -102,6 +103,9 @@
     let obstaclesVisible = false;
     let obstaclesLoaded = false;
     let allMarkers = [];
+    let influenceLayer = null; // слой для зон влияния
+    let volgograd_boundaries = null; // административные границы Волгограда
+    let bordersLoaded = false; // флаг загрузки границ
 
     // helper to show messages (falls back to console if element removed)
     function setInfo(message) {
@@ -129,6 +133,18 @@
 
         // Загружаем GeoJSON файл с препятствиями (НЕ добавляем на карту сразу)
         loadObstaclesGeoJSON();
+        
+        // Загружаем административные границы Волгограда
+        if (window.loadAreaGeoJSON) {
+            loadAreaGeoJSON('Волгоград').then(geojson => {
+                volgograd_boundaries = geojson;
+                bordersLoaded = true;
+                console.log('Границы Волгограда загружены');
+            }).catch(error => {
+                console.warn('Не удалось загрузить границы Волгограда:', error);
+                bordersLoaded = false;
+            });
+        }
 
         // Создаём маркеры торговых центров из database.js
         if (window.shoppingCenters && window.shoppingCenters.length > 0) {
@@ -214,7 +230,249 @@
 
         // Обработчики для других кнопок
         document.getElementById('toggleInfluence')?.addEventListener('click', () => {
-            setInfo('Функция "Зоны влияния" в разработке');
+            const btn = document.getElementById('toggleInfluence');
+            
+            // Используем только ВИДИМЫЕ маркеры (выбранные по районам)
+            const visibleMarkers = allMarkers.filter(marker => map.hasLayer(marker));
+            
+            if (visibleMarkers.length < 2) {
+                setInfo('Для построения полигонов Тиссена/Вороного нужны минимум 2 видимых торговых центра. Выберите районы!');
+                return;
+            }
+            
+            // Если слой уже существует и видим - скрываем его
+            if (influenceLayer && map.hasLayer(influenceLayer)) {
+                map.removeLayer(influenceLayer);
+                btn.textContent = 'Зоны влияния';
+                btn.classList.remove('is-on');
+                btn.setAttribute('aria-pressed', 'false');
+                setInfo('Зоны влияния скрыты');
+                influenceLayer = null;
+                return;
+            }
+            
+            setInfo('Идёт расчёт зон влияния для видимых ТЦ...');
+            
+            setTimeout(() => {
+                try {
+                    // Подготовка данных только для ВИДИМЫХ ТЦ
+                    const centers = visibleMarkers.map((marker, idx) => {
+                        const centerData = window.shoppingCenters.find(sc => 
+                            Math.abs(sc.lat - marker.getLatLng().lat) < 0.0001 && 
+                            Math.abs(sc.lng - marker.getLatLng().lng) < 0.0001
+                        );
+                        
+                        return {
+                            lat: marker.getLatLng().lat,
+                            lng: marker.getLatLng().lng,
+                            area: centerData ? centerData.area : 10000,
+                            name: centerData ? centerData.name : 'ТЦ',
+                            index: idx,
+                            marker: marker
+                        };
+                    });
+                    
+                    // Функция проверки точки на препятствие с кэшем (упрощённая версия)
+                    const obstacleCache = {};
+                    let obstaclesEnabled = obstaclesLoaded && obstacleLayer;
+                    
+                    function isPointOnObstacle(lat, lng) {
+                        if (!obstaclesEnabled || !window.turf) return false;
+                        
+                        // Проверяем кэш
+                        const key = Math.round(lat * 100) + ',' + Math.round(lng * 100);
+                        if (key in obstacleCache) return obstacleCache[key];
+                        
+                        try {
+                            const point = window.turf.point([lng, lat]);
+                            let result = false;
+                            
+                            // Проверяем только первые 10 фичей для скорости
+                            let featureCount = 0;
+                            obstacleLayer.eachLayer(layer => {
+                                if (featureCount >= 10) return;
+                                if (layer.feature) {
+                                    try {
+                                        if (window.turf.booleanPointInPolygon(point, layer.feature)) {
+                                            result = true;
+                                        }
+                                    } catch (e) {}
+                                }
+                                featureCount++;
+                            });
+                            
+                            obstacleCache[key] = result;
+                            return result;
+                        } catch (e) {
+                            return false;
+                        }
+                    }
+                    
+                    // Функция проверки нахождения точки внутри административных границ Волгограда
+                    const bordersCache = {};
+                    function isPointInsideVolgograd(lat, lng) {
+                        if (!bordersLoaded || !volgograd_boundaries || !window.turf) return true;
+                        
+                        const key = Math.round(lat * 100) + ',' + Math.round(lng * 100);
+                        if (key in bordersCache) return bordersCache[key];
+                        
+                        try {
+                            const point = window.turf.point([lng, lat]);
+                            let result = false;
+                            
+                            if (volgograd_boundaries.type === 'Polygon') {
+                                result = window.turf.booleanPointInPolygon(point, volgograd_boundaries);
+                            } else if (volgograd_boundaries.type === 'MultiPolygon') {
+                                result = volgograd_boundaries.coordinates.some(coordinates => {
+                                    try {
+                                        return window.turf.booleanPointInPolygon(point, { type: 'Polygon', coordinates: coordinates });
+                                    } catch (e) {
+                                        return false;
+                                    }
+                                });
+                            }
+                            
+                            bordersCache[key] = result;
+                            return result;
+                        } catch (e) {
+                            return true;
+                        }
+                    }
+                    
+                    // Границы для расчета
+                    const lats = centers.map(c => c.lat);
+                    const lngs = centers.map(c => c.lng);
+                    const bounds = {
+                        minLat: Math.min(...lats) - 0.05,
+                        maxLat: Math.max(...lats) + 0.05,
+                        minLng: Math.min(...lngs) - 0.05,
+                        maxLng: Math.max(...lngs) + 0.05
+                    };
+                    
+                    // Конвертация метров в градусы
+                    function metersToDegreesLat(meters) {
+                        return meters / 111111;
+                    }
+                    
+                    function metersToDegreesLng(meters, lat) {
+                        return meters / (111111 * Math.cos(lat * Math.PI / 180));
+                    }
+                    
+                    const centerLat = (bounds.minLat + bounds.maxLat) / 2;
+                    const stepLat = metersToDegreesLat(500);
+                    const stepLng = metersToDegreesLng(500, centerLat);
+                    
+                    // Собираем точки для каждого центра
+                    const pointsByCenter = {};
+                    centers.forEach(c => {
+                        pointsByCenter[c.index] = [];
+                    });
+                    
+                    // Создаём сетку и определяем принадлежность каждой точки
+                    for (let lat = bounds.minLat; lat <= bounds.maxLat; lat += stepLat) {
+                        for (let lng = bounds.minLng; lng <= bounds.maxLng; lng += stepLng) {
+                            // Пропускаем точки вне границ Волгограда
+                            if (!isPointInsideVolgograd(lat, lng)) {
+                                continue;
+                            }
+                            
+                            // Пропускаем точки на барьерах
+                            if (isPointOnObstacle(lat, lng)) {
+                                continue;
+                            }
+                            
+                            // Ближайший центр по евклидову расстоянию
+                            let bestIdx = -1;
+                            let bestDist = Infinity;
+                            
+                            for (let i = 0; i < centers.length; i++) {
+                                const center = centers[i];
+                                const dLat = lat - center.lat;
+                                const dLng = (lng - center.lng) * Math.cos(center.lat * Math.PI / 180);
+                                const distDegrees = Math.sqrt(dLat * dLat + dLng * dLng);
+                                
+                                if (distDegrees < bestDist) {
+                                    bestDist = distDegrees;
+                                    bestIdx = i;
+                                }
+                            }
+                            
+                            if (bestIdx !== -1) {
+                                pointsByCenter[bestIdx].push([lat, lng]);
+                            }
+                        }
+                    }
+                    
+                    // Строим выпуклые оболочки для каждого центра
+                    const voronoiPolygons = {};
+                    
+                    centers.forEach((center, centerIdx) => {
+                        const points = pointsByCenter[centerIdx];
+                        
+                        if (points.length < 3) return;
+                        
+                        if (window.turf && window.turf.convex) {
+                            try {
+                                const features = points.map(p => window.turf.point([p[1], p[0]]));
+                                const collection = window.turf.featureCollection(features);
+                                const hull = window.turf.convex(collection);
+                                
+                                if (hull && hull.geometry && hull.geometry.coordinates && hull.geometry.coordinates.length > 0) {
+                                    voronoiPolygons[centerIdx] = hull.geometry.coordinates[0].map(coord => [coord[1], coord[0]]);
+                                }
+                            } catch (e) {
+                                console.warn('Ошибка convex hull:', e);
+                            }
+                        }
+                    });
+                    
+                    // Создание нового слоя
+                    if (influenceLayer) {
+                        map.removeLayer(influenceLayer);
+                    }
+                    influenceLayer = L.layerGroup().addTo(map);
+                    
+                    // Построение выпуклых полигонов
+                    const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFE194', '#B79CED', '#FAA2C2', '#A9D9A0'];
+                    
+                    centers.forEach((center, centerIdx) => {
+                        const polygonCoords = voronoiPolygons[centerIdx];
+                        
+                        if (!polygonCoords || polygonCoords.length < 3) return;
+                        
+                        const polygon = L.polygon(polygonCoords, {
+                            color: '#8B0000',
+                            weight: 1.5,
+                            opacity: 0.8,
+                            fillColor: '#FF0000',
+                            fillOpacity: 0.15,
+                            className: 'influence-polygon'
+                        });
+                        
+                        polygon.on('mouseover', function() {
+                            this.setStyle({ fillOpacity: 0.3 });
+                        });
+                        
+                        polygon.on('mouseout', function() {
+                            this.setStyle({ fillOpacity: 0.15 });
+                        });
+                        
+                        polygon.bindPopup(`<b>${center.name}</b>`);
+                        polygon.addTo(influenceLayer);
+                    });
+                    
+                    // Обновление интерфейса
+                    btn.textContent = 'Зоны влияния (вкл)';
+                    btn.classList.add('is-on');
+                    btn.setAttribute('aria-pressed', 'true');
+                    const polygonCount = Object.keys(voronoiPolygons).length;
+                    setInfo(`Построены выпуклые зоны Вороного для ${polygonCount} видимых ТЦ`);
+                    
+                } catch (error) {
+                    console.error('Ошибка при построении зон влияния:', error);
+                    setInfo('Ошибка при расчёте зон влияния');
+                }
+            }, 100);
         });
 
         document.getElementById('toggleDeficit')?.addEventListener('click', () => {
@@ -248,8 +506,8 @@
                 // Создаем слой с препятствиями
                 obstacleLayer = L.geoJSON(data, {
                     style: {
-                        fillColor: '#FF4444',
-                        color: '#FF0000',
+                        fillColor: '#191970',
+                        color: '#0000CD',
                         weight: 2,
                         fillOpacity: 0.3
                     },
@@ -307,8 +565,23 @@
             }
         });
         
+        // Очищаем полигоны Вороного при изменении районов
+        if (influenceLayer && map.hasLayer(influenceLayer)) {
+            map.removeLayer(influenceLayer);
+            influenceLayer = null;
+        }
+        
+        // Сбрасываем кнопку Зоны влияния
+        const btn = document.getElementById('toggleInfluence');
+        if (btn) {
+            btn.textContent = 'Зоны влияния';
+            btn.classList.remove('is-on');
+            btn.setAttribute('aria-pressed', 'false');
+        }
+        
         // Если ничего не выбрано - не показываем маркеры
         if (selectedDistricts.length === 0) {
+            setInfo('Выберите район для отображения ТЦ');
             return;
         }
         

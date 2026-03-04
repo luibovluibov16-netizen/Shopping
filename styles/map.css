@@ -230,7 +230,7 @@ body {
 .toggle-btn.is-on {
     background: rgba(40, 167, 69, 0.12);
     border-color: rgba(40, 167, 69, 0.45);
-    color: #1a6e2f;
+    color: #111111;
 }
 
 .toggle-btn:active {
@@ -281,6 +281,7 @@ body {
     grid-template-columns: repeat(2, 1fr);
     gap: 8px;
 }
+
 .small-btn {
     background: white;
     border: 1px solid #E0E0E0;
@@ -303,6 +304,7 @@ body {
 .small-btn:active {
     transform: scale(0.98);
 }
+
 .filter-actions {
     display: flex;
     gap: 8px;
